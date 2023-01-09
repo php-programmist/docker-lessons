@@ -91,7 +91,7 @@ docker ps --filter="NAME=test-php-fpm"
 ### Запуск команды в запущенном контейнере:
 
 ```bash
-docker exec test-php-fpm php -v;
+docker exec test-php-fpm php -v
 ```
 
 `exec` - исполняет новую команду в уже запущенном контейнере.
