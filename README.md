@@ -4,4 +4,4 @@
 2) Dockerfile и создание образа
 3) Тома, сети и порты
 4) Docker Swarm
-5) Kubernetes
+5) [Kubernetes](lesson5/index.md)

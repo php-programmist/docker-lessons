@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-deploy
+  labels:
+    name: webapp-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+        - image: git.example.com:5050/test-project/webapp
+          name: webapp
+          env:
+            - name: NODE_ENV
+              value: production
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+
+      imagePullSecrets:
+        -   name: test-secret
