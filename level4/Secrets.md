@@ -31,7 +31,7 @@ metadata:
 type: kubernetes.io/dockerconfigjson
 ```
 
-В папке `lesson5/base/secret/` создаем файл `test-secret.yaml` с вышеуказанным содержимым.
+В папке `level4/base/secret/` создаем файл `test-secret.yaml` с вышеуказанным содержимым.
 
 И добавляем новый файл в ресурсы в файле [lesson5/base/kustomization.yaml](base/kustomization.yaml):
 ```yaml
