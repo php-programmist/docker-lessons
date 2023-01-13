@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql # По этому имени сервис доступен во внутренней сети - mysql:3306
+  labels:
+    app: mysql
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3306
+  selector:
+    app: mysql
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+type: Opaque
+data:
+  mysql_root_password: bGVtcC1wYXNz #lemp-pass в base64
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: mysql
+        image: mysql
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: db-secret
+                key: mysql_root_password
+          - name: MYSQL_DATABASE
+            value: lemp-db
+        livenessProbe:
+          # Добавляем проверку на то, что с контейнером все в порядке
+          exec:
+            command:
+            - bash
+            - "-c"
+            - |
+              set -ex
+              mysqladmin -p$MYSQL_ROOT_PASSWORD ping &> /dev/null
+        readinessProbe:
+          # Добавляем проверку готовности контейнера
+          exec:
+            command:
+            - bash
+            - "-c"
+            - |
+              set -ex
+              mysql -h $HOSTNAME -p$MYSQL_ROOT_PASSWORD -e "SELECT 1" &> /dev/null
+        volumeMounts:
+          - name: mysql-storage
+            mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-storage
+          hostPath:
+            path: /opt/docker-lessons/level4/lemp/step2/var/mysql  # Абсолютный путь на хост-машине к папке с файлами базы данных. Если папка отсутствует, то она будет создана автоматически

@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  labels:
+    name: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "nginx"
+  template:
+    metadata:
+      labels:
+        app: "nginx"
+    spec:
+      initContainers:
+        - name: check-php-fpm
+          image: busybox:1.28
+            # Контейнер nginx запустится только после запуска php-fpm.
+            # php-fpm - это название сервиса (metadata.name), а 9000 - это порт, который слушает сервис (spec.ports[0].port)
+          command: ['sh', '-c', 'until nc -z php-fpm 9000; do sleep 2; done']
+      containers:
+      - image: "nginx:latest"
+        name: nginx
+        ports:
+        - containerPort: 80 # Порт внутри контейнера, который слушает Nginx.
+          hostPort: 8080 # Порт хост-машины. Здесь порт контейнера напрямую связывается с портом
+              #хост-машины, поэтому сервис для доступа к контейнеру не нужен.
+              #так можно делать, когда кластер состоит только из одной ноды.
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-volume
+          mountPath: /etc/nginx/conf.d/php.conf # Монтируем файл с настройками обработки PHP
+          subPath: php.conf
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf # Монтируем файл с общими настройками Nginx
+          subPath: nginx.conf
+        - name: core-storage
+          mountPath: /var/www/html # Путь внутри контейнера, куда будут записаны файла приложения
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsUser: 0
+      volumes:
+        - name: nginx-volume
+          configMap:
+            name: php-conf
+        - name: nginx-config
+          configMap:
+            name: nginx-conf
+        - name: core-storage
+          hostPath:
+            path: /opt/docker-lessons/level4/lemp/step1/core # абсолютный путь на хост-машине к папке с файлами приложения
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: php-conf
+data:
+    php.conf: |
+      server {
+        listen 80 default_server;
+        index index.php index.html;
+        error_log  /var/log/nginx/php-error.log;
+        access_log /var/log/nginx/php-access.log;
+        root /var/www/html;
+        location ~ \.php$ {
+            try_files $uri =404;
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass php-fpm:9000; # Название сервиса и его порт
+            fastcgi_index index.php;
+            include fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param PATH_INFO $fastcgi_path_info;
+        }
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+            gzip_static on;
+        }
+      }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: nginx-conf
+data:
+    nginx.conf: |
+        user nginx;
+        pid /run/nginx.pid;
+        worker_processes auto;
+        worker_rlimit_nofile 65535;
+        
+        events {
+            multi_accept on;
+            worker_connections 65535;
+        }
+        
+        http {
+            charset utf-8;
+            sendfile on;
+            tcp_nopush on;
+            tcp_nodelay on;
+            server_tokens off;
+            log_not_found off;
+            types_hash_max_size 2048;
+            client_max_body_size 16M;
+        
+            # MIME
+            include mime.types;
+            default_type application/octet-stream;
+        
+            # logging
+            access_log /var/log/nginx/access.log;
+            error_log /var/log/nginx/error.log warn;
+        
+            # load configs
+            include /etc/nginx/conf.d/*.conf;
+            include /etc/nginx/sites-enabled/*;
+        }
