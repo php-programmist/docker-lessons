@@ -2,15 +2,22 @@
 
 Для того чтобы можно было использовать образы из приватного реестра, необходимо создать Секрет и использовать его в спецификации **deployment**.
 
-Допустим, у нас есть приватный реестр `git.example.com:5050` и зарегистрированный пользователь с доступом к реестру. Логин - `test-user` и пароль - `test-password`.
+Допустим, у нас есть приватный реестр `git.example.com:5050` необходимо создать Project Access Token для проекта с реестром образов:
+1) Settings -> Access Tokens.
+2) Token name - **project-registry**
+3) Expiration date - убираем дату, чтобы токен действовал бессрочно
+4) Select a role - **Developer**, 
+5) Ставим галочку возле **read_registry**.
+
+Полученный токен записываем. Допустим это `abcd123456`
 
 Для создания секрета удобно будет использовать bash-скрипт - [auth.sh](auth.sh):
 ```bash
 #!/usr/bin/env bash
 
 microk8s kubectl create secret docker-registry test-secret \
-    --docker-username=test-user \
-    --docker-password="test-password" \
+    --docker-username="project-registry" \
+    --docker-password="abcd123456" \
     --docker-server=git.example.com:5050
 
 microk8s kubectl get secret test-secret --output=yaml
@@ -20,14 +27,14 @@ microk8s kubectl get secret test-secret --output=yaml
 ```yaml
 apiVersion: v1
 data:
-  .dockerconfigjson: eyJhdXRocyI6eyJnaXQuZXhhbXBsZS5jb206NTA1MCI6eyJ1c2VybmFtZSI6InRlc3QtdXNlciIsInBhc3N3b3JkIjoidGVzdC1wYXNzd29yZCIsImF1dGgiOiJkR1Z6ZEMxMWMyVnlPblJsYzNRdGNHRnpjM2R2Y21RPSJ9fX0=
+    .dockerconfigjson: eyJhdXRocyI6eyJnaXQuZXhhbXBsZS5jb206NTA1MCI6eyJ1c2VybmFtZSI6InByb2plY3QtcmVnaXN0cnkiLCJwYXNzd29yZCI6ImFiY2QxMjM0NTYiLCJhdXRoIjoiY0hKdmFtVmpkQzF5WldkcGMzUnllVHBoWW1Oa01USXpORFUyIn19fQ==
 kind: Secret
 metadata:
-  creationTimestamp: "2023-01-11T15:24:50Z"
-  name: test-secret
-  namespace: default
-  resourceVersion: "21988309"
-  uid: 3a00335a-068c-418a-b0db-dce7b43b6812
+    creationTimestamp: "2023-01-16T17:13:23Z"
+    name: test-secret
+    namespace: default
+    resourceVersion: "7162"
+    uid: 909bdb4a-3df1-4ae5-83a8-7bba014c19c1
 type: kubernetes.io/dockerconfigjson
 ```
 
