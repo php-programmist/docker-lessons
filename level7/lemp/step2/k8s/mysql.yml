@@ -69,4 +69,4 @@ spec:
       volumes:
         - name: mysql-storage
           hostPath:
-            path: /opt/docker-lessons/level4/lemp/step2/var/mysql  # Абсолютный путь на хост-машине к папке с файлами базы данных. Если папка отсутствует, то она будет создана автоматически
+            path: /opt/docker-lessons/level7/lemp/step2/var/mysql  # Абсолютный путь на хост-машине к папке с файлами базы данных. Если папка отсутствует, то она будет создана автоматически

@@ -17,30 +17,27 @@ spec:
       initContainers:
         - name: check-php-fpm
           image: busybox:1.28
+            # Контейнер nginx запустится только после запуска php-fpm.
+            # php-fpm - это название сервиса (metadata.name), а 9000 - это порт, который слушает сервис (spec.ports[0].port)
           command: ['sh', '-c', 'until nc -z php-fpm 9000; do sleep 2; done']
       containers:
       - image: "nginx:latest"
         name: nginx
         ports:
-        - containerPort: 80
-          hostPort: 8080
+        - containerPort: 80 # Порт внутри контейнера, который слушает Nginx.
+          hostPort: 8080 # Порт хост-машины. Здесь порт контейнера напрямую связывается с портом
+              #хост-машины, поэтому сервис для доступа к контейнеру не нужен.
+              #так можно делать, когда кластер состоит только из одной ноды.
           protocol: TCP
-        resources:
-          requests:
-            memory: "100Mi"
-            cpu: "100m"
-          limits:
-            memory: "500Mi"
-            cpu: "500m"
         volumeMounts:
         - name: nginx-volume
-          mountPath: /etc/nginx/conf.d/php.conf
+          mountPath: /etc/nginx/conf.d/php.conf # Монтируем файл с настройками обработки PHP
           subPath: php.conf
         - name: nginx-config
-          mountPath: /etc/nginx/nginx.conf
+          mountPath: /etc/nginx/nginx.conf # Монтируем файл с общими настройками Nginx
           subPath: nginx.conf
         - name: core-storage
-          mountPath: /var/www/html
+          mountPath: /var/www/html # Путь внутри контейнера, куда будут записаны файла приложения
         securityContext:
           allowPrivilegeEscalation: false
           runAsUser: 0
@@ -53,7 +50,7 @@ spec:
             name: nginx-conf
         - name: core-storage
           hostPath:
-            path: /opt/docker-lessons/level4/lemp/step2/core # абсолютный путь на хост-машине к папке с файлами приложения
+            path: /opt/docker-lessons/level7/lemp/step1/core # абсолютный путь на хост-машине к папке с файлами приложения
 
 ---
 apiVersion: v1
@@ -71,7 +68,7 @@ data:
         location ~ \.php$ {
             try_files $uri =404;
             fastcgi_split_path_info ^(.+\.php)(/.+)$;
-            fastcgi_pass php-fpm:9000;
+            fastcgi_pass php-fpm:9000; # Название сервиса и его порт
             fastcgi_index index.php;
             include fastcgi_params;
             fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
