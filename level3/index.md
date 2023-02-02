@@ -22,7 +22,7 @@
 Перейдем к практике и запустим контейнер Nginx с открытием порта:
 
 ```bash
-docker run --rm -d --name edge -p 8000:80 nginx:1.23
+docker run --rm -d --name edge -p 8000:80 nginx:1.23-alpine
 ```
 
 Теперь запросим список запущенных контейнеров с именем `edge`:
@@ -72,7 +72,7 @@ docker stop edge
 Давайте запустим контейнер Nginx, не указывая порт явно:
 
 ```bash
-docker run --rm -d --name edge -P nginx:1.23
+docker run --rm -d --name edge -P nginx:1.23-alpine
 ```
 
 Узнать порт хоста можно двумя способами:
@@ -136,7 +136,7 @@ docker run --rm -d \
   --mount type=bind,source="$(pwd)"/config/nginx.conf,target=/etc/nginx/nginx.conf \
   --mount type=bind,source="$(pwd)"/config/app.conf,target=/etc/nginx/conf.d/app.conf \
   --mount type=bind,source="$(pwd)"/content,target=/usr/share/nginx/html \
-  nginx:1.23
+  nginx:1.23-alpine
 ```
 Либо запустите скрипт `./up.sh`.
 

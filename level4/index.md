@@ -2,9 +2,11 @@
 
 ## Сети
 
+Если контейнеры находятся внутри одной сети, то нет необходимости публиковать порты контейнеров, т.к. они могут взаимодействовать напрямую с любым портом другого контейнера.
+
 ### Сети по-умолчанию
 
-Для того чтобы контейнеры могли взаимодействовать друг с другом, они должны находиться внутри одной сети. Если мы не создавали ни одной сети, то по умолчанию их будет три.
+ Если мы не создавали ни одной сети, то по умолчанию их будет три.
 
 Получить список сетей:
 ```bash
@@ -19,7 +21,7 @@ ID сетей будут другие, но названия и драйверы
 
 На самом деле, `host` и `none` не являются полноценными сетями, но об этом поговорим позже.
 
-Если контейнер запускает без указания конкретной сети, то он будет подключен к сети `bridge`.
+Если контейнер запускается без указания конкретной сети, то он будет подключен к дефолтной сети `bridge`.
 
 Запустим 2 контейнера:
 ```bash
@@ -205,5 +207,199 @@ docker stop edge php-fpm && docker network rm first-net
 
 ## LEMP
 
+Теперь настало время применить все знания предыдущих уроков, чтобы собрать полноценный LEMP-стек (Linux Enginx Mysql Php).
+
+Создайте новую сеть:
+```bash
+docker network create --driver bridge lemp-net
+```
+Перейдите в папку `level4/lemp` и запустите контейнеры:
+```bash
+docker run --rm -d \
+  --name db \
+  --network lemp-net \
+  -e MYSQL_ROOT_PASSWORD=lemp-pass \
+  -e MYSQL_DATABASE=lemp-db \
+  --mount type=volume,source=db_volume,target=/var/lib/mysql \
+  mysql:8.0
+  
+docker run --rm -d \
+  --name php-fpm \
+  --network lemp-net \
+  --mount type=bind,source="$(pwd)"/config/php-fpm/local.ini,target=/usr/local/etc/php/conf.d/local.ini \
+  --mount type=bind,source="$(pwd)"/core,target=/var/www/html \
+  phpprogrammist/php:8.1-fpm-dev-mysql
+  
+docker run --rm -d \
+  --name edge \
+  --network lemp-net \
+  -p 8000:80 \
+  --mount type=bind,source="$(pwd)"/config/edge/nginx.conf,target=/etc/nginx/nginx.conf \
+  --mount type=bind,source="$(pwd)"/config/edge/php.conf,target=/etc/nginx/conf.d/php.conf \
+  --mount type=bind,source="$(pwd)"/core,target=/var/www/html \
+  nginx:1.23-alpine  
+```
+Обратите внимание, что мы публикуем порты только для `edge`, т.к. к нему мы будем обращаться из "внешнего" мира, а взаимодействие между другими контейнерами организовано благодаря сети `lemp-net`.
+
+Также стоит обратить внимание на конфигурационный файл Nginx [php.conf](lemp/config/edge/php.conf). В нем указано слушать 80-й порт и все запросы, которые в адресе содержат расширение `.php` перенаправлять в контейнер `php-fpm` на 9000-й порт:
+
+`fastcgi_pass php-fpm:9000`
+
+9000-й порт мы не открывали, но он доступен благодаря общей сети. Обращаемся к контейнеру по его имени тоже благодаря пользовательской сети.
+
+Внутрь контейнеров `php-fpm` и `edge` с помощью монтирования помимо конфигурационных файлов помещаем папку `./core`, в которой содержатся PHP-файлы:
+
+[db.php](lemp/core/db.php) содержит подключение к БД MySQL:
+```php
+return new PDO('mysql:host=db:3306;dbname=lemp-db', 'root', 'lemp-pass');
+```
+Обратите внимание на хост: `db:3306` - здесь также идет обращение к контейнеру по имени и порту через пользовательскую сеть.
+
+`lemp-db` - это название БД, которая была создана при запуске контейнера благодаря переменной окружения `MYSQL_DATABASE`.
+
+`root` - это имя пользователя
+
+`lemp-pass` - это пароль, который указан в переменной окружения `MYSQL_ROOT_PASSWORD`.
+
+Файл [init.php](lemp/core/init.php) содержит скрипт, который создает таблицу `post`, если она еще не создана, а также добавляет в нее 3 записи:
+```php
+/** @var PDO $pdo */
+$pdo = include "db.php";
+$pdo->exec('CREATE TABLE IF NOT EXISTS `post` (
+  `id` int(11) NOT NULL auto_increment,       
+  `text` varchar(255)  NOT NULL default "",
+   PRIMARY KEY  (`id`)
+)');
+
+
+$pdo->exec('INSERT INTO `post` (`text`) VALUES 
+  ("Первый"),
+  ("Второй"),
+  ("Третий")
+  ');
+
+echo 'Инициализация завершена';
+```
+
+Файл [index.php](lemp/core/init.php) получает из БД список всех постов и генерирует HTML, который содержит этот список.
+```php
+<?php
+/** @var PDO $pdo */
+$pdo = include "db.php";
+try {
+    $stmt = $pdo->query('SELECT * from post order by id desc');
+    $posts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $posts = [];
+}
+
+$title = 'Список постов';
+?>
+
+<html lang="en">
+<head>
+    <title><?php echo $title ?></title>
+</head>
+<body>
+<h1><?php echo $title ?></h1>
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Текст</th>
+    </tr>
+    <?php foreach ($posts as $post): ?>
+        <tr>
+            <td><?php echo $post['id'] ?></td>
+            <td><?php echo $post['text'] ?></td>
+        </tr>
+    <?php endforeach; ?>
+</table>
+</body>
+</html>
+```
+
+Убедимся, что контейнеры запущены:
+```bash
+docker container ls
+```
+Если мы сразу вызовем `index.php`, то получим HTML-страницу, которая не содержит список постов.
+
+```bash
+curl 0.0.0.0:8000
+```
+
+```html
+<html lang="en">
+<head>
+    <title>Список постов</title>
+</head>
+<body>
+<h1>Список постов</h1>
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Текст</th>
+    </tr>
+    </table>
+</body>
+</html>
+```
+
+Теперь запустим скрипт инициализации:
+```bash
+curl 0.0.0.0:8000/init.php
+```
+
+Теперь снова запросим индексную страницу:
+```bash
+curl 0.0.0.0:8000
+```
+И теперь увидим в ней таблицу с тремя постами:
+
+```html
+<html lang="en">
+<head>
+    <title>Список постов</title>
+</head>
+<body>
+<h1>Список постов</h1>
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Текст</th>
+    </tr>
+            <tr>
+            <td>3</td>
+            <td>Третий</td>
+        </tr>
+            <tr>
+            <td>2</td>
+            <td>Второй</td>
+        </tr>
+            <tr>
+            <td>1</td>
+            <td>Первый</td>
+        </tr>
+    </table>
+</body>
+</html>
+```
+
+Если несколько раз вызвать скрипт инициализации, то каждый раз в БД будет добавляться 3 поста, которые можно увидит на индексной странице.
+
+Итого, мы имеем жизнеспособный стек из трех контейнеров:
+1) `db` - записывает, хранит и отдает данные по запросу контейнера `php-fpm`.
+2) `php-fpm` - создает таблицу, записывает в нее данные, извлекает нужные данные и генерирует HTML.
+3) `edge` - получает запрос от пользователя, перенаправляет запрос в контейнер `php-fpm`, ждет ответ от контейнера и отдает результат пользователю.
+
+Теперь можно остановить стек, удалить том базы данных и сеть:
+
+```bash
+docker stop edge php-fpm db \
+&& docker volume rm db_volume \
+&& docker network rm lemp-net
+```
+
 ## Домашнее задание
 1) Ознакомиться со списком [драйверов сетей](https://docs.docker.com/network/)
+2) Запустите LEMP-стек, указав для Nginx порт вашей хост-машины, который доступен при обращении через браузер. Вызовите скрипты инициализации и индексной страницы через браузер.
