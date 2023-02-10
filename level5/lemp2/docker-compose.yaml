@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+    db:
+        image: mysql:5.7
+        environment:
+            - MYSQL_ROOT_PASSWORD=lemp-pass
+            - MYSQL_DATABASE=lemp-db
+        volumes: # Развернутый синтаксис монтирования
+            -   type: volume # Тип монтирования
+                source: db_volume # название тома. "db_volume" нужно обязательно указать в корневом элементе "volumes" (в конце файла)
+                target: /var/lib/mysql #абсолютный путь в контейнере
+
+        healthcheck: # Проверка работоспособности сервиса. Переопределяет инструкцию HEALTHCHECK в Dockerfile. Если команда проверки выполнена успешно, то сервис получает статус HEALTHY.
+            test: mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD # Команада проверки.
+            interval: 5s # Интервал проверки
+            retries: 10 # Количество неуспешных попыток. Когда будет достигнуто, сервис получит статус UNHEALTHY
+
+    php-fpm:
+        image: phpprogrammist/php:8.1-fpm-dev-mysql
+        build: images/php-fpm # Относительный путь к Dockerfile для сборки образа для данного контейнера.
+        # Позволяет при использовании команды "docker compose build" произвести сборку всех образов, указанных в поле "build".
+        # Либо можно запустить сборку для конкретного сервиса "docker compose build php-fpm"
+        volumes:
+            -   type: bind
+                source: ./config/php-fpm/local.ini
+                target: /usr/local/etc/php/conf.d/local.ini
+            -   type: bind # Тип монтирование связыванием
+                source: ./core # Папка хост-машины. Относительный путь. Должен начинаться с "." или ".."
+                target: /var/www/html #абсолютный путь в контейнере
+        depends_on:
+            db:
+                condition: service_healthy # сервис "php-fpm" будет запущен после сервиса "db" и только после того, как он пройдет проверку на работоспособность
+
+    edge:
+        image: nginx:1.23-alpine
+        networks:
+            default: null
+        ports: # Развернутый синтаксис маппинга портов
+            -   mode: ingress # Режим. "host" - публикует порт на каждой ноде. "ingress" - использует балансировщик нагрузки
+                target: 80 # Порт контейнера
+                published: 8001 # Порт хост-машин
+                protocol: tcp # Протокол: tcp или udp
+        volumes: # Развернутый синтаксис монтирования
+            -   type: bind
+                source: ./config/edge/nginx.conf
+                target: /etc/nginx/nginx.conf
+            -   type: bind
+                source: ./config/edge/php.conf
+                target: /etc/nginx/conf.d/php.conf
+            -   type: bind
+                source: ./core
+                target: /var/www/html
+        depends_on:
+            - php-fpm
+
+volumes: # Именованные Docker тома, которые используются в сервисах, должны быть перечислены здесь
+    db_volume:
