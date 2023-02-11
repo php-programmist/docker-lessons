@@ -8,10 +8,13 @@ services:
             - MYSQL_DATABASE=lemp-db
         volumes: # Развернутый синтаксис монтирования
             -   type: volume # Тип монтирования
-                source: db_volume # название тома. "db_volume" нужно обязательно указать в корневом элементе "volumes" (в конце файла)
+                source: db_volume # название тома.
+                # "db_volume" нужно обязательно указать в корневом элементе "volumes" (в конце файла)
                 target: /var/lib/mysql #абсолютный путь в контейнере
 
-        healthcheck: # Проверка работоспособности сервиса. Переопределяет инструкцию HEALTHCHECK в Dockerfile. Если команда проверки выполнена успешно, то сервис получает статус HEALTHY.
+        healthcheck: # Проверка работоспособности сервиса.
+        # Переопределяет инструкцию HEALTHCHECK в Dockerfile.
+        # Если команда проверки выполнена успешно, то сервис получает статус HEALTHY.
             test: mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD # Команада проверки.
             interval: 5s # Интервал проверки
             retries: 10 # Количество неуспешных попыток. Когда будет достигнуто, сервис получит статус UNHEALTHY
@@ -30,7 +33,8 @@ services:
                 target: /var/www/html #абсолютный путь в контейнере
         depends_on:
             db:
-                condition: service_healthy # сервис "php-fpm" будет запущен после сервиса "db" и только после того, как он пройдет проверку на работоспособность
+                condition: service_healthy # сервис "php-fpm" будет запущен после сервиса "db",
+                # но только после того, как он пройдет проверку на работоспособность
 
     edge:
         image: nginx:1.23-alpine
