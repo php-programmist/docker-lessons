@@ -16,7 +16,7 @@ Docker Compose - инструмент для запуска и управлен�
 
 Для Ubuntu:
 ```bash
-sudo apt-get update && apt-get install docker-compose-plugin
+sudo apt-get update && sudo apt-get install docker-compose-plugin
 ```
 
 Еще раз проверяем версию - `docker compose version`. Должны получить сообщение типа `Docker Compose version v2.16.0`.
