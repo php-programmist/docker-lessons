@@ -34,8 +34,8 @@ spec:
             cpu: "500m"
         volumeMounts:
         - name: nginx-volume
-          mountPath: /etc/nginx/conf.d/php.conf
-          subPath: php.conf
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
         - name: nginx-config
           mountPath: /etc/nginx/nginx.conf
           subPath: nginx.conf
@@ -47,7 +47,7 @@ spec:
       volumes:
         - name: nginx-volume
           configMap:
-            name: php-conf
+            name: default-conf
         - name: nginx-config
           configMap:
             name: nginx-conf
@@ -59,11 +59,12 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-    name: php-conf
+    name: default-conf
 data:
-    php.conf: |
+    default.conf: |
       server {
         listen 80 default_server;
+        server_name localhost;
         index index.php index.html;
         error_log  /var/log/nginx/php-error.log;
         access_log /var/log/nginx/php-access.log;

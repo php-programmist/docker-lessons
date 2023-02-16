@@ -28,7 +28,7 @@ services: # Сервис - это некая обертка над контей�
             # Сначала указывается порт хост-машины, а после двоеточия - порт контейнера.
         volumes:
             - ./config/edge/nginx.conf:/etc/nginx/nginx.conf
-            - ./config/edge/php.conf:/etc/nginx/conf.d/php.conf
+            - ./config/edge/default.conf:/etc/nginx/conf.d/default.conf
             - ./core:/var/www/html
         depends_on: # Зависимости сервиса. Данный сервис будет запущен после запуска сервиса "php-fpm"
             - php-fpm

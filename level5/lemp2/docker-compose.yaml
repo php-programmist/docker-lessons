@@ -50,8 +50,8 @@ services:
                 source: ./config/edge/nginx.conf
                 target: /etc/nginx/nginx.conf
             -   type: bind
-                source: ./config/edge/php.conf
-                target: /etc/nginx/conf.d/php.conf
+                source: ./config/edge/default.conf
+                target: /etc/nginx/conf.d/default.conf
             -   type: bind
                 source: ./core
                 target: /var/www/html
