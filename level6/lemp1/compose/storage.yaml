@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+    db:
+        image: mysql:5.7
+        hostname: "db-{{.Node.Hostname}}"
+        deploy:
+            mode: replicated
+            replicas: 1 # Одна реплика потому, что в противном случае у каждой ноды будет своя БД и данные между ними не будут синхронизироваться
+            restart_policy:
+                condition: any
+        environment:
+            - MYSQL_ROOT_PASSWORD=lemp-pass
+            - MYSQL_DATABASE=lemp-db
+        networks:
+            - lemp-overlay # Сеть также нужно указать дополнительно в корневом поле networks (внизу файла)
+        volumes: # Развернутый синтаксис монтирования
+            -   type: volume
+                source: db_volume # название тома.
+                # "db_volume" нужно обязательно указать в корневом элементе "volumes" (в конце файла)
+                target: /var/lib/mysql
+
+        healthcheck: # Проверка работоспособности сервиса.
+            test: mysqladmin ping -h 127.0.0.1 -u root --password=$$MYSQL_ROOT_PASSWORD
+            interval: 5s
+            retries: 10
+
+volumes: # Именованные Docker тома, которые используются в сервисах, должны быть перечислены здесь
+    db_volume:
+
+networks:
+    lemp-overlay:
+        external: true

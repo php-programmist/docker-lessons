@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+    php-fpm:
+        image: phpprogrammist/php:8.1-fpm-dev-mysql
+        hostname: "php-fpm-{{.Node.Hostname}}"
+        deploy:
+            mode: replicated # будет создано столько реплик, сколько указано ниже.
+            replicas: 6 # создастся 6 контейнеров и будут равномерно распределены по надом
+            restart_policy:
+                condition: any # перезапускать при остановке всегда
+        networks:
+            - lemp-overlay # Сеть также нужно указать дополнительно в корневом поле networks (внизу файла)
+        volumes:
+            -   type: bind
+                source: ../config/php-fpm/local.ini
+                target: /usr/local/etc/php/conf.d/local.ini
+            -   type: bind
+                source: ../core
+                target: /var/www/html
+
+networks:
+    lemp-overlay:
+        external: true
