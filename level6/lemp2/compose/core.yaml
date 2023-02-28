@@ -6,9 +6,12 @@ services:
         hostname: php-fpm-{{.Node.Hostname}}-{{.Task.Slot}}
         deploy:
             mode: replicated # будет создано столько реплик, сколько указано ниже.
-            replicas: 6 # создастся 6 контейнеров и будут равномерно распределены по нодам
+            replicas: 4 # создастся 4 контейнера и будут равномерно распределены по нодам с меткой fpm
             restart_policy:
                 condition: any # перезапускать при остановке всегда
+            placement:
+                constraints:
+                    - node.labels.fpm == true # Реплики будут размещены на нодах с меткой fpm
         networks:
             - lemp-overlay # Сеть также нужно указать дополнительно в корневом поле networks (внизу файла)
         volumes:

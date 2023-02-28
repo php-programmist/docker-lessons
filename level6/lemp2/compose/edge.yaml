@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+    gateway:
+        image: nginx:1.23-alpine
+        hostname: "gateway-{{.Node.Hostname}}" # Шаблон для формирования названия хоста
+        deploy:
+            mode: global # на каждой ноде будет поднята одна реплика
+            restart_policy:
+                condition: any # перезапускать при остановке всегда
+            placement:
+                constraints:
+                    - node.labels.ingress == true # Реплики будут размещены на нодах с меткой ingress
+        networks:
+            - lemp-overlay # Сеть также нужно указать дополнительно в корневом поле networks (внизу файла)
+        ports:
+            -   mode: host # Режим. "host" - публикует порт на каждой ноде. "ingress" - использует балансировщик нагрузки
+                target: 80 # Порт контейнера
+                published: 80 # Порт хост-машин
+                protocol: tcp # Протокол: tcp или udp
+        volumes: # Развернутый синтаксис монтирования
+            -   type: bind
+                source: ../config/edge/nginx.conf
+                target: /etc/nginx/nginx.conf
+            -   type: bind
+                source: ../config/edge/default.conf
+                target: /etc/nginx/conf.d/default.conf
+            -   type: bind
+                source: ../core
+                target: /var/www/html
+# Указываем созданную вручную сеть
+networks:
+    lemp-overlay:
+        external: true # Отметка о том, что сеть создается вручную

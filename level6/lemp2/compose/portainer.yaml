@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+    agent: # Агент, который собирает данные на ноде
+        image: portainer/agent:2.17.1-alpine
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+            - /var/lib/docker/volumes:/var/lib/docker/volumes
+        networks:
+            - agent_network # Сеть, которая объединяет веб-панель и агентов
+        deploy:
+            mode: global # Реплика будет поднята на каждой ноде
+            placement:
+                constraints: [node.platform.os == linux] # будет размещено только на нодах под управлением Linux
+
+    portainer: # Сервис веб-панели
+        image: portainer/portainer-ce:2.17.1-alpine
+        command: -H tcp://tasks.agent:9001 --tlsskipverify
+        ports:
+            - "9443:9443" # По этому порту можно попасть в панель
+            - "8000:8000"
+        volumes:
+            - portainer_data:/data
+        networks:
+            - agent_network # Сеть, которая объединяет веб-панель и агентов
+        deploy:
+            mode: replicated
+            replicas: 1
+            placement:
+                constraints: [node.role == manager] # Веб-панель будет поднята только на ноде с ролью manager
+
+networks: # Настройки сети
+    agent_network:
+        driver: overlay
+        attachable: true
+
+volumes:
+    portainer_data:

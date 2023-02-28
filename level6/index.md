@@ -133,7 +133,7 @@ version: "3.9"
 services:
     php-fpm:
         image: phpprogrammist/php:8.1-fpm-dev-mysql
-        hostname: "php-fpm-{{.Node.Hostname}}"
+        hostname: php-fpm-{{.Node.Hostname}}-{{.Task.Slot}}
         deploy:
             mode: replicated # будет создано столько реплик, сколько указано ниже.
             replicas: 6 # создастся 6 контейнеров и будут равномерно распределены по надом
@@ -473,3 +473,139 @@ docker stack rm edge core storage && docker volume rm storage_db_volume
 ```
 
 Для удобства запуска, остановки и перезапуска добавил 3 bash-скрипта: [up.sh](lemp1/up.sh), [down.sh](lemp1/down.sh), [restart.sh](lemp1/restart.sh). Не забывайте добавлять права на исполнение (`chmod +x *.sh`) перед первым использованием.
+
+## Label (Метки)
+Swarm по умолчанию развертывает сервисы на любой доступной ноде/нодах, но как правило нам необходимо развертывать их на конкретной ноде или на специфической группе. Для этого можно использовать метки (label) на нодах.
+
+Допустим, что нам нужно, чтобы Nginx и PHP-FPM запускался на нодах `manager` и `worker-1`, а база данных была развернута на ноде `worker-2`. 
+
+Добавим метки `ingress` и `fpm` на ноды `manager` и `worker-1` (выполняем команды на `manager`):
+```bash
+docker node update --label-add ingress=true --label-add fpm=true manager
+docker node update --label-add ingress=true --label-add fpm=true worker-1
+```
+И метку `storage` на ноду `worker-2`:
+```bash
+docker node update --label-add storage=true worker-2
+```
+
+Проверим наличие меток на нодах:
+```bash
+docker node inspect manager --format "{{json .Spec.Labels}}"
+# {"fpm":"true","ingress":"true"}
+docker node inspect worker-1 --format "{{json .Spec.Labels}}"
+# {"fpm":"true","ingress":"true"}
+docker node inspect worker-2 --format "{{json .Spec.Labels}}"
+# {"storage":"true"}
+```
+
+Теперь настроим сервисы так, чтобы они создавали контейнеры только на нодах с соответствующей меткой.
+
+Для этого нужно указать метку в `deploy.placement.constraints`:
+```yaml
+services:
+    php-fpm:
+        deploy:
+            placement:
+                constraints:
+                    - node.labels.fpm == true # Реплики будут размещены на нодах с меткой fpm
+```
+Перейдем в папку `/level6/lemp2/` и запустим все стеки (выбрав первый вариант - **все**):
+```bash
+./up.sh
+```
+
+Проверяем сервис `edge_gateway`:
+```bash
+docker service ps edge_gateway
+# ID             NAME                                     IMAGE               NODE       DESIRED STATE   CURRENT STATE            ERROR     PORTS
+# w15enk18qf5i   edge_gateway.wlcc3dy4ucbvm2x6lafueqr4i   nginx:1.23-alpine   manager    Running         Running 16 seconds ago             *:80->80/tcp,*:80->80/tcp
+# ir6fp7bqxdam   edge_gateway.x1frrpcgk6qwpo6j8h4eh70lk   nginx:1.23-alpine   worker-1   Running         Running 16 seconds ago             *:80->80/tcp,*:80->80/tcp
+```
+
+Проверяем сервис `core_php-fpm`:
+```bash
+docker service ps core_php-fpm
+# ID             NAME             IMAGE                                  NODE       DESIRED STATE   CURRENT STATE                ERROR     PORTS
+# wnxzjnu7hqqq   core_php-fpm.1   phpprogrammist/php:8.1-fpm-dev-mysql   worker-1   Running         Running about a minute ago             
+# t18v9e1m0r3j   core_php-fpm.2   phpprogrammist/php:8.1-fpm-dev-mysql   manager    Running         Running about a minute ago             
+# trdz18lpi2f0   core_php-fpm.3   phpprogrammist/php:8.1-fpm-dev-mysql   worker-1   Running         Running about a minute ago             
+# dc3u9o73gm9t   core_php-fpm.4   phpprogrammist/php:8.1-fpm-dev-mysql   manager    Running         Running about a minute ago
+```
+
+Проверяем сервис `storage_db`:
+```bash
+docker service ps storage_db
+# ID             NAME           IMAGE       NODE       DESIRED STATE   CURRENT STATE           ERROR     PORTS
+# tsdv91ywfspo   storage_db.1   mysql:5.7   worker-2   Running         Running 3 minutes ago
+```
+
+Как видим, на `manager` и `worker-1` запущены реплики Nginx и PHP-FPM, а на `worker-2` - только один контейнер с MySQL.
+
+## Portainer
+Для Swarm также есть удобная веб-панель, которая позволяет мониторить и управлять кластером.
+
+Устанавливается Portainer как обычный стек. Настройки стека прописаны в файле [portainer.yaml](lemp2/compose/portainer.yaml):
+```yaml
+version: "3.9"
+
+services:
+    agent: # Агент, который собирает данные на ноде
+        image: portainer/agent:2.17.1-alpine
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+            - /var/lib/docker/volumes:/var/lib/docker/volumes
+        networks:
+            - agent_network # Сеть, которая объединяет веб-панель и агентов
+        deploy:
+            mode: global # Реплика будет поднята на каждой ноде
+            placement:
+                constraints: [node.platform.os == linux] # будет размещено только на нодах под управлением Linux
+
+    portainer: # Сервис веб-панели
+        image: portainer/portainer-ce:2.17.1-alpine
+        command: -H tcp://tasks.agent:9001 --tlsskipverify
+        ports:
+            - "9443:9443" # По этому порту можно попасть в панель
+            - "8000:8000"
+        volumes:
+            - portainer_data:/data
+        networks:
+            - agent_network # Сеть, которая объединяет веб-панель и агентов
+        deploy:
+            mode: replicated
+            replicas: 1
+            placement:
+                constraints: [node.role == manager] # Веб-панель будет поднята только на ноде с ролью manager
+
+networks: # Настройки сети
+    agent_network:
+        driver: overlay
+        attachable: true
+
+volumes:
+    portainer_data:
+```
+
+Т.к. чуть ранее мы запустили все стеки, то `portainer` уже работает.
+
+В браузере открываем адрес [https://158.160.30.163:9443](https://158.160.30.163:9443). 
+
+При первом обращении к панели будет предложено создать пользователя.
+
+В ПУ можно просматривать список стеков, сервисов, контейнеров, образов, сетей, томов, визуализировать кластер.
+
+На вкладке `Services` можно изменить количество реплик, обновить образы и удалить сервис.
+
+На вкладке `Containers` можно просмотреть логи контейнера, проинспектировать его и просмотреть статистику. Теоретически можно войти в контейнер, но эти функции у меня не заработали. 
+
+На вкладке `Volumes` можно просматривать содержимое томов.
+
+Теперь можно удалить все стеки:
+```bash
+./down.sh
+```
+На этом курс по изучению Docker закончен! 
+
+## Домашнее задание
+Поднимите стеки из сегодняшнего урока на кластере, который состоит из одной ноды.
